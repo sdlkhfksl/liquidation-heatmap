@@ -127,33 +127,37 @@ liquidation_heatmap/
 
 ## 🚀 Deployment Options
 
-### 1. Render (Free + Private Repos) ⭐
+### 1. Digital Ocean (Recommended) ⭐
+[![Deploy to DO](https://img.shields.io/badge/Deploy%20to-DigitalOcean-0080FF?style=for-the-badge&logo=digitalocean)](DEPLOYMENT.md)
+
+**One-command deployment:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/vsching/liquidation-heatmap/main/deploy-digitalocean.sh | bash
+```
+- ✅ **Real API access** - No restrictions
+- ✅ **$4-6/month** - Very affordable
+- ✅ **Custom domain** - Professional setup
+- ✅ **Full control** - Your own server
+
+### 2. Docker (Any Server)
+```bash
+# Clone and run with Docker
+git clone https://github.com/vsching/liquidation-heatmap.git
+cd liquidation-heatmap
+docker-compose up -d
+```
+
+### 3. Render (Free + Private Repos)
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 
-**Steps:**
-1. Go to [render.com](https://render.com) and sign up
-2. Click "New" → "Web Service"  
-3. Connect your GitHub repo (works with private repos!)
-4. Render will auto-detect the `render.yaml` config
-5. Click "Deploy" - your app will be live in ~3 minutes!
-
-### 2. Streamlit Cloud (Free, Public Repos Only)
+### 4. Streamlit Cloud (Free, Public Repos Only)
 [![Deploy to Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/new?repo=vsching/liquidation-heatmap&branch=main&mainModule=streamlit_app.py)
 
-### 3. Railway
+### 5. Railway / Heroku
 ```bash
 railway up
-```
-
-### 4. Heroku
-```bash
+# or
 git push heroku main
-```
-
-### 5. Docker
-```bash
-docker build -t liquidation-heatmap .
-docker run -p 8501:8501 liquidation-heatmap
 ```
 
 ## 📈 Liquidation Formula
