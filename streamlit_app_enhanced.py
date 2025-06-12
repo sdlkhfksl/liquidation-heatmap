@@ -1,6 +1,8 @@
 import streamlit as st
 import sys
 import os
+import time
+from datetime import datetime
 sys.path.append('src')
 
 from data_fetcher import LiquidationDataFetcher
@@ -32,34 +34,60 @@ with st.sidebar:
     )
     
     # Enhanced refresh options
-    refresh_mode = st.radio("Refresh Mode", ["Manual", "Auto-refresh"], index=0)
+    st.subheader("🔄 Update Settings")
+    refresh_mode = st.radio(
+        "Refresh Mode",
+        ["Manual", "Auto-refresh"],
+        index=0
+    )
     
     if refresh_mode == "Auto-refresh":
         refresh_interval = st.selectbox(
             "Update Interval",
-            [5, 10, 30, 60, 300],
+            [
+                ("5 seconds", 5),
+                ("10 seconds", 10), 
+                ("30 seconds", 30),
+                ("1 minute", 60),
+                ("5 minutes", 300)
+            ],
             index=2,
-            format_func=lambda x: f"{x} seconds" if x < 60 else f"{x//60} minute{'s' if x//60 > 1 else ''}"
-        )
-        auto_refresh = True
-    else:
-        auto_refresh = False
-        refresh_interval = 30
+            format_func=lambda x: x[0]
+        )[1]
+        
+        st.info(f"🔄 Auto-updating every {refresh_interval} seconds")
     
-    if st.button("🔄 Refresh Data"):
+    if st.button("🔄 Refresh Now"):
         st.rerun()
+
+# Add last update time
+if 'last_update' not in st.session_state:
+    st.session_state.last_update = datetime.now()
+
+# Status bar
+col1, col2, col3 = st.columns([2, 1, 1])
+with col1:
+    st.caption(f"📡 Exchange: {exchange.upper()} | Symbol: {symbol}")
+with col2:
+    st.caption(f"🕒 Last Update: {st.session_state.last_update.strftime('%H:%M:%S')}")
+with col3:
+    if refresh_mode == "Auto-refresh":
+        # Show countdown
+        placeholder = st.empty()
 
 # Main content
 try:
     with st.spinner(f"Fetching {symbol} data from {exchange}..."):
         fetcher = LiquidationDataFetcher(exchange)
         data = fetcher.get_liquidation_heatmap_data(symbol)
+        st.session_state.last_update = datetime.now()
     
     if data:
         # Display current price prominently
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric(
+            price_change = st.empty()
+            price_change.metric(
                 label=f"{symbol} Price",
                 value=f"${data['current_price']:,.2f}",
                 delta=None
@@ -123,12 +151,19 @@ try:
 except Exception as e:
     st.error(f"❌ Error: {str(e)}")
 
-# Auto-refresh with custom interval
-if auto_refresh:
-    import time
-    time.sleep(refresh_interval)
+# Auto-refresh logic
+if refresh_mode == "Auto-refresh":
+    # Show countdown timer
+    if col3:
+        with col3:
+            countdown_placeholder = st.empty()
+            for i in range(refresh_interval, 0, -1):
+                countdown_placeholder.caption(f"⏱️ Next update: {i}s")
+                time.sleep(1)
+    
+    # Refresh the page
     st.rerun()
 
 # Footer
 st.markdown("---")
-st.caption("📊 Built with CCXT • Data from live exchanges • Updates every refresh")
+st.caption("📊 Built with CCXT • Data from live exchanges • Real-time liquidation analysis")
