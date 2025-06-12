@@ -128,7 +128,7 @@ liquidation_heatmap/
 ## 🚀 Deployment Options
 
 ### 1. Streamlit Cloud (Free)
-[![Deploy](https://img.shields.io/badge/Deploy-Streamlit-FF4B4B?style=for-the-badge)](https://share.streamlit.io)
+[![Deploy to Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/new?repo=vsching/liquidation-heatmap&branch=main&mainModule=streamlit_app.py)
 
 ### 2. Heroku
 ```bash
