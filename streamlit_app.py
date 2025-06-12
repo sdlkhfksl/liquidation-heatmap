@@ -42,15 +42,12 @@ with st.sidebar:
         time_period = st.selectbox(
             "Time Period",
             [
-                ("1 Hour", "1h", 60),
-                ("4 Hours", "4h", 240), 
                 ("12 Hours", "12h", 720),
-                ("1 Day", "1d", 1440),
-                ("3 Days", "3d", 4320),
-                ("1 Week", "1w", 10080),
-                ("2 Weeks", "2w", 20160)
+                ("24 Hours", "1d", 1440),
+                ("2 Days", "2d", 2880),
+                ("3 Days", "3d", 4320)
             ],
-            index=3,
+            index=1,
             format_func=lambda x: x[0]
         )
         selected_timeframe = time_period[1]
