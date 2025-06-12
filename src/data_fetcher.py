@@ -181,8 +181,19 @@ class LiquidationDataFetcher:
         
         current_price = ticker['last']
         
+        # Map timeframes to valid exchange intervals
+        timeframe_mapping = {
+            "12h": "1h",  # Use 1h candles for 12h period
+            "1d": "1h",   # Use 1h candles for 1d period  
+            "2d": "4h",   # Use 4h candles for 2d period
+            "3d": "4h"    # Use 4h candles for 3d period
+        }
+        
+        valid_timeframe = timeframe_mapping.get(timeframe, "1h")
+        candles_needed = max(12, duration_minutes // (60 if valid_timeframe == "1h" else 240))
+        
         # Fetch historical OHLCV data
-        ohlcv = self.fetch_ohlcv(symbol, timeframe, limit=min(duration_minutes // 60, 1000))
+        ohlcv = self.fetch_ohlcv(symbol, valid_timeframe, limit=min(candles_needed, 1000))
         
         if ohlcv is None or ohlcv.empty:
             print("⚠️ No historical data available, using current snapshot")
