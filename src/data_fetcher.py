@@ -66,7 +66,8 @@ class LiquidationDataFetcher:
             liquidation_levels['long_liquidations'].append({
                 'leverage': leverage,
                 'price': long_liq_price,
-                'distance_percent': ((current_price - long_liq_price) / current_price) * 100
+                'distance_percent': ((current_price - long_liq_price) / current_price) * 100,
+                'risk_level': 'high' if leverage >= 50 else 'medium' if leverage >= 25 else 'low'
             })
             
             # Short liquidation (price goes up)
@@ -74,7 +75,8 @@ class LiquidationDataFetcher:
             liquidation_levels['short_liquidations'].append({
                 'leverage': leverage,
                 'price': short_liq_price,
-                'distance_percent': ((short_liq_price - current_price) / current_price) * 100
+                'distance_percent': ((short_liq_price - current_price) / current_price) * 100,
+                'risk_level': 'high' if leverage >= 50 else 'medium' if leverage >= 25 else 'low'
             })
         
         return liquidation_levels
@@ -162,5 +164,162 @@ class LiquidationDataFetcher:
             'liquidation_levels': liquidation_levels,
             'heatmap_data': heatmap_df,
             'ohlcv': ohlcv,
-            'timestamp': datetime.now()
+            'timestamp': datetime.now(),
+            'analysis_type': 'real-time'
         }
+    
+    def get_historical_liquidation_data(self, symbol: str, timeframe: str, duration_minutes: int) -> Dict:
+        """
+        Get historical liquidation analysis over a specific timeframe.
+        """
+        print(f"📊 Fetching historical data for {symbol} over {timeframe}...")
+        
+        # Get current price first
+        ticker = self.fetch_ticker(symbol)
+        if not ticker:
+            return None
+        
+        current_price = ticker['last']
+        
+        # Fetch historical OHLCV data
+        ohlcv = self.fetch_ohlcv(symbol, timeframe, limit=min(duration_minutes // 60, 1000))
+        
+        if ohlcv is None or ohlcv.empty:
+            print("⚠️ No historical data available, using current snapshot")
+            return self.get_liquidation_heatmap_data(symbol)
+        
+        # Calculate price volatility and ranges
+        price_min = ohlcv['low'].min()
+        price_max = ohlcv['high'].max()
+        price_avg = ohlcv['close'].mean()
+        volatility = ((ohlcv['high'] - ohlcv['low']) / ohlcv['close']).mean()
+        
+        # Create enhanced liquidation levels based on historical data
+        liquidation_levels = self.calculate_enhanced_liquidation_levels(
+            current_price, price_min, price_max, volatility
+        )
+        
+        # Generate historical heatmap with time series
+        heatmap_df = self.generate_historical_heatmap(
+            ohlcv, liquidation_levels, duration_minutes
+        )
+        
+        return {
+            'symbol': symbol,
+            'current_price': current_price,
+            'liquidation_levels': liquidation_levels,
+            'heatmap_data': heatmap_df,
+            'ohlcv': ohlcv,
+            'timestamp': datetime.now(),
+            'analysis_type': 'historical',
+            'timeframe': timeframe,
+            'duration_minutes': duration_minutes,
+            'price_stats': {
+                'min': price_min,
+                'max': price_max,
+                'avg': price_avg,
+                'volatility': volatility
+            }
+        }
+    
+    def calculate_enhanced_liquidation_levels(self, current_price: float, price_min: float, 
+                                            price_max: float, volatility: float) -> Dict[str, List[float]]:
+        """
+        Calculate enhanced liquidation levels based on historical price movements.
+        """
+        leverage_levels = [5, 10, 25, 50, 100, 125]
+        
+        liquidation_levels = {
+            'long_liquidations': [],
+            'short_liquidations': []
+        }
+        
+        # Factor in historical volatility for more realistic liquidation zones
+        volatility_multiplier = max(1.0, min(2.0, 1 + volatility))
+        
+        for leverage in leverage_levels:
+            # Base liquidation calculation
+            base_long_liq = current_price * (1 - 1/leverage)
+            base_short_liq = current_price * (1 + 1/leverage)
+            
+            # Adjust based on historical ranges
+            range_factor = (price_max - price_min) / current_price
+            adjusted_range = range_factor * volatility_multiplier
+            
+            # Enhanced liquidation zones
+            long_liq_price = max(base_long_liq, price_min * 1.01)  # Don't go below historical low
+            short_liq_price = min(base_short_liq, price_max * 0.99)  # Don't go above historical high
+            
+            liquidation_levels['long_liquidations'].append({
+                'leverage': leverage,
+                'price': long_liq_price,
+                'distance_percent': ((current_price - long_liq_price) / current_price) * 100,
+                'risk_level': 'high' if leverage >= 50 else 'medium' if leverage >= 25 else 'low'
+            })
+            
+            liquidation_levels['short_liquidations'].append({
+                'leverage': leverage,
+                'price': short_liq_price,
+                'distance_percent': ((short_liq_price - current_price) / current_price) * 100,
+                'risk_level': 'high' if leverage >= 50 else 'medium' if leverage >= 25 else 'low'
+            })
+        
+        return liquidation_levels
+    
+    def generate_historical_heatmap(self, ohlcv: pd.DataFrame, liquidation_levels: Dict,
+                                  duration_minutes: int) -> pd.DataFrame:
+        """
+        Generate a time-based liquidation heatmap from historical data.
+        """
+        if ohlcv.empty:
+            return pd.DataFrame()
+        
+        # Create time-based price grid
+        time_points = min(len(ohlcv), 50)  # Max 50 time points for visualization
+        price_points = 100
+        
+        # Get price range from historical data
+        price_min = ohlcv['low'].min() * 0.95
+        price_max = ohlcv['high'].max() * 1.05
+        
+        price_grid = np.linspace(price_min, price_max, price_points)
+        time_grid = ohlcv['timestamp'].iloc[-time_points:] if len(ohlcv) >= time_points else ohlcv['timestamp']
+        
+        heatmap_data = []
+        
+        for i, timestamp in enumerate(time_grid):
+            # Get the price at this time point
+            if i < len(ohlcv):
+                historical_price = ohlcv.iloc[i]['close']
+                volume = ohlcv.iloc[i]['volume']
+            else:
+                historical_price = ohlcv.iloc[-1]['close']
+                volume = ohlcv.iloc[-1]['volume']
+            
+            for price in price_grid:
+                # Calculate liquidation intensity based on distance from historical price
+                distance_factor = abs(price - historical_price) / historical_price
+                
+                # Volume-weighted liquidation probability
+                long_intensity = volume * np.exp(-distance_factor * 10) if price < historical_price else 0
+                short_intensity = volume * np.exp(-distance_factor * 10) if price > historical_price else 0
+                
+                # Add leverage-based multipliers
+                for liq_level in liquidation_levels['long_liquidations']:
+                    if abs(price - liq_level['price']) < (price * 0.01):  # Within 1%
+                        long_intensity *= (1 + liq_level['leverage'] / 100)
+                
+                for liq_level in liquidation_levels['short_liquidations']:
+                    if abs(price - liq_level['price']) < (price * 0.01):
+                        short_intensity *= (1 + liq_level['leverage'] / 100)
+                
+                heatmap_data.append({
+                    'timestamp': timestamp,
+                    'price': price,
+                    'long_liquidation_volume': long_intensity,
+                    'short_liquidation_volume': short_intensity,
+                    'total_liquidation_volume': long_intensity + short_intensity,
+                    'historical_price': historical_price
+                })
+        
+        return pd.DataFrame(heatmap_data)

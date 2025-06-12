@@ -31,6 +31,37 @@ with st.sidebar:
         index=0
     )
     
+    st.subheader("📊 Analysis Period")
+    duration_type = st.radio(
+        "Duration Type",
+        ["Real-time Snapshot", "Historical Analysis"],
+        index=0
+    )
+    
+    if duration_type == "Historical Analysis":
+        time_period = st.selectbox(
+            "Time Period",
+            [
+                ("1 Hour", "1h", 60),
+                ("4 Hours", "4h", 240), 
+                ("12 Hours", "12h", 720),
+                ("1 Day", "1d", 1440),
+                ("3 Days", "3d", 4320),
+                ("1 Week", "1w", 10080),
+                ("2 Weeks", "2w", 20160)
+            ],
+            index=3,
+            format_func=lambda x: x[0]
+        )
+        selected_timeframe = time_period[1]
+        analysis_minutes = time_period[2]
+        
+        st.info(f"📈 Analyzing liquidations over {time_period[0]}")
+    else:
+        selected_timeframe = "current"
+        analysis_minutes = 0
+        st.info("⚡ Real-time liquidation snapshot")
+    
     # Enhanced refresh options
     refresh_mode = st.radio("Refresh Mode", ["Manual", "Auto-refresh"], index=0)
     
@@ -51,30 +82,61 @@ with st.sidebar:
 
 # Main content
 try:
-    with st.spinner(f"Fetching {symbol} data from {exchange}..."):
+    if duration_type == "Historical Analysis":
+        spinner_text = f"Analyzing {symbol} liquidations over {time_period[0]} from {exchange}..."
+    else:
+        spinner_text = f"Fetching real-time {symbol} data from {exchange}..."
+        
+    with st.spinner(spinner_text):
         fetcher = LiquidationDataFetcher(exchange)
-        data = fetcher.get_liquidation_heatmap_data(symbol)
+        if duration_type == "Historical Analysis":
+            data = fetcher.get_historical_liquidation_data(symbol, selected_timeframe, analysis_minutes)
+        else:
+            data = fetcher.get_liquidation_heatmap_data(symbol)
     
     if data:
+        # Show analysis type and additional info
+        analysis_type = data.get('analysis_type', 'real-time')
+        
+        if analysis_type == 'historical':
+            st.success(f"📊 Historical Analysis: {data['timeframe']} over {data.get('duration_minutes', 0)/60:.1f} hours")
+            
+            # Show historical price stats if available
+            if 'price_stats' in data:
+                stats = data['price_stats']
+                col_stats1, col_stats2, col_stats3, col_stats4 = st.columns(4)
+                with col_stats1:
+                    st.metric("Price Range Low", f"${stats['min']:,.2f}")
+                with col_stats2:
+                    st.metric("Price Range High", f"${stats['max']:,.2f}")
+                with col_stats3:
+                    st.metric("Average Price", f"${stats['avg']:,.2f}")
+                with col_stats4:
+                    st.metric("Volatility", f"{stats['volatility']*100:.2f}%")
+        else:
+            st.info("⚡ Real-time liquidation snapshot")
+        
         # Display current price prominently
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric(
-                label=f"{symbol} Price",
+                label=f"Current {symbol} Price",
                 value=f"${data['current_price']:,.2f}",
                 delta=None
             )
         with col2:
             long_5x = data['liquidation_levels']['long_liquidations'][0]
+            risk_emoji = "🔴" if long_5x.get('risk_level') == 'high' else "🟡" if long_5x.get('risk_level') == 'medium' else "🟢"
             st.metric(
-                label="Long 5x Liquidation",
+                label=f"{risk_emoji} Long 5x Liquidation",
                 value=f"${long_5x['price']:,.2f}",
                 delta=f"-{long_5x['distance_percent']:.1f}%"
             )
         with col3:
             short_5x = data['liquidation_levels']['short_liquidations'][0]
+            risk_emoji = "🔴" if short_5x.get('risk_level') == 'high' else "🟡" if short_5x.get('risk_level') == 'medium' else "🟢"
             st.metric(
-                label="Short 5x Liquidation", 
+                label=f"{risk_emoji} Short 5x Liquidation", 
                 value=f"${short_5x['price']:,.2f}",
                 delta=f"+{short_5x['distance_percent']:.1f}%"
             )
@@ -99,10 +161,13 @@ try:
             st.subheader("🔴 Long Liquidations")
             long_df = []
             for liq in data['liquidation_levels']['long_liquidations']:
+                risk_level = liq.get('risk_level', 'unknown')
+                risk_emoji = "🔴" if risk_level == 'high' else "🟡" if risk_level == 'medium' else "🟢"
                 long_df.append({
                     "Leverage": f"{liq['leverage']}x",
                     "Price": f"${liq['price']:,.2f}",
-                    "Distance": f"{liq['distance_percent']:.2f}%"
+                    "Distance": f"{liq['distance_percent']:.2f}%",
+                    "Risk": f"{risk_emoji} {risk_level.title()}"
                 })
             st.dataframe(long_df, hide_index=True)
         
@@ -110,10 +175,13 @@ try:
             st.subheader("🟢 Short Liquidations")
             short_df = []
             for liq in data['liquidation_levels']['short_liquidations']:
+                risk_level = liq.get('risk_level', 'unknown')
+                risk_emoji = "🔴" if risk_level == 'high' else "🟡" if risk_level == 'medium' else "🟢"
                 short_df.append({
                     "Leverage": f"{liq['leverage']}x",
                     "Price": f"${liq['price']:,.2f}",
-                    "Distance": f"{liq['distance_percent']:.2f}%"
+                    "Distance": f"{liq['distance_percent']:.2f}%",
+                    "Risk": f"{risk_emoji} {risk_level.title()}"
                 })
             st.dataframe(short_df, hide_index=True)
         
