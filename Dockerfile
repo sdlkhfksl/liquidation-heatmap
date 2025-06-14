@@ -6,17 +6,15 @@
 # ---- 1st Stage: Builder ----
 FROM python:3.11-slim AS builder
 
-# Set working dir and copy dependencies
 WORKDIR /app
 COPY requirements.txt .
 
 # Install build tools and Python deps into /install
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       gcc g++ \
+       gcc g++ curl \
     && pip install --prefix=/install --no-cache-dir -r requirements.txt \
     && rm -rf /var/lib/apt/lists/*
-
 
 # ---- 2nd Stage: Final Image ----
 FROM python:3.11-slim
@@ -33,16 +31,16 @@ COPY . .
 # Expose Streamlit port
 EXPOSE 8501
 
-# Health check on custom route
+# Health check on default Streamlit health endpoint
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-    CMD curl --fail http://localhost:8501/healthz || exit 1
+    CMD curl --fail http://localhost:8501/_stcore/health || exit 1
 
 # Switch to non-root user
 USER appuser
 
-# Run Streamlit in headless mode, with custom health route
+# Run Streamlit in headless mode (default health check enabled)
 CMD ["streamlit", "run", "streamlit_app.py", \
      "--server.port=8501", \
      "--server.address=0.0.0.0", \
      "--server.headless=true", \
-     "--server.healthCheckRoute=/healthz"]
+     "--server.scriptHealthCheckEnabled=true"]
